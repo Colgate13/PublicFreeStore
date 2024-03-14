@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>encrypt files studing</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      #displayKey {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border: 1px solid #ddd;
+        word-wrap: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>encrypt files studing</h2>
+    <input type="file" id="fileInput" />
+    <div id="displayKey"></div>
+    <button id="downloadEncrypted">DOWNLOAD</button>
+    <br />
+    <pre id="displayKey"></pre>
+    <input type="file" id="encryptedFileInput" />
+    <textarea
+      id="keyInput"
+      placeholder="Cole a chave de criptografia aqui"
+    ></textarea>
+    <button id="decryptAndDownload">decrypt and download</button>
+    <script>
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", async (event) => {
+          const file = event.target.files[0];
+          if (!file) {
+            return;
+          }
+
+          const key = await window.crypto.subtle.generateKey(
+            {
+              name: "AES-GCM",
+              length: 256,
+            },
+            true,
+            ["encrypt", "decrypt"]
+          );
+
+          const exportedKey = await window.crypto.subtle.exportKey("jwk", key);
+          const keyString = JSON.stringify(exportedKey);
+          document.getElementById(
+            "displayKey"
+          ).textContent = `Key to decrypt: ${keyString}`;
+
+          const fileData = await file.arrayBuffer();
+
+          const iv = window.crypto.getRandomValues(new Uint8Array(12));
+          const encryptedData = await window.crypto.subtle.encrypt(
+            {
+              name: "AES-GCM",
+              iv: iv,
+            },
+            key,
+            fileData
+          );
+
+          const encryptedFile = new Blob([iv, encryptedData], {
+            type: "application/octet-stream",
+          });
+
+          document
+            .getElementById("downloadEncrypted")
+            .addEventListener("click", () => {
+              const downloadUrl = URL.createObjectURL(encryptedFile);
+              const a = document.createElement("a");
+              document.body.appendChild(a);
+              a.style = "display: none";
+              a.href = downloadUrl;
+              a.download = "encrypted_file";
+              a.click();
+              window.URL.revokeObjectURL(downloadUrl);
+              a.remove();
+            });
+        });
+
+      document
+        .getElementById("decryptAndDownload")
+        .addEventListener("click", async () => {
+          const file = document.getElementById("encryptedFileInput").files[0];
+          const keyString = document.getElementById("keyInput").value;
+          if (!file || !keyString) {
+            alert("File or key is missing. Please provide both.");
+            return;
+          }
+
+          const keyObj = JSON.parse(keyString);
+          const key = await window.crypto.subtle.importKey(
+            "jwk",
+            keyObj,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["decrypt"]
+          );
+
+          const fileData = await file.arrayBuffer();
+          const iv = fileData.slice(0, 12);
+          const data = fileData.slice(12);
+
+          try {
+            const decryptedData = await window.crypto.subtle.decrypt(
+              { name: "AES-GCM", iv: new Uint8Array(iv) },
+              key,
+              data
+            );
+
+            const decryptedFile = new Blob([decryptedData], {
+              type: "application/octet-stream",
+            });
+            const downloadUrl = URL.createObjectURL(decryptedFile);
+
+            const a = document.createElement("a");
+            document.body.appendChild(a);
+            a.style = "display: none";
+            a.href = downloadUrl;
+            a.download = "decrypted_file";
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            a.remove();
+          } catch (e) {
+            alert(
+              "Error in decrypting the file. Please make sure the key is correct."
+            );
+          }
+        });
+    </script>
+  </body>
+</html>
